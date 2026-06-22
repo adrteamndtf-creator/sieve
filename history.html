@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Run History | Sieve Calibration System{% endblock %}
+{% block page_title %}Calibration Run History{% endblock %}
+
+{% block content %}
+<div class="card">
+    <!-- Filter Toolbar -->
+    <div class="flex-between mb-20" style="flex-wrap: wrap; gap:16px;">
+        <h2 class="section-title" style="margin-bottom:0">
+            <i class="fa-solid fa-database text-primary"></i> Sieve Calibration Log
+        </h2>
+        
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+            <!-- Filter Search -->
+            <div style="position:relative; width: 220px;">
+                <input type="text" id="search-sieve-id" class="form-control" placeholder="Search Sieve ID..." style="padding-left:36px; padding-top:8px; padding-bottom:8px; font-size:13px">
+                <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:12px; top:11px; color:var(--text-muted); font-size:14px;"></i>
+            </div>
+            
+            <!-- Filter Status -->
+            <select id="filter-status" style="width:130px; padding-top:8px; padding-bottom:8px; font-size:13px">
+                <option value="all">All Statuses</option>
+                <option value="pass">Pass</option>
+                <option value="fail">Fail</option>
+            </select>
+        </div>
+    </div>
+    
+    <!-- Logs Table -->
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date & Time</th>
+                    <th>Sieve ID Tag</th>
+                    <th>Sieve Name</th>
+                    <th>Nominal Size</th>
+                    <th>State</th>
+                    <th>Holes Checked</th>
+                    <th>Avg Area (mm²)</th>
+                    <th>Wire (mm)</th>
+                    <th>Compliance</th>
+                    <th style="text-align:right">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="history-table-body">
+                <tr>
+                    <td colspan="10" class="text-center">Loading run history...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allRuns = [];
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const searchInput = document.getElementById("search-sieve-id");
+        const filterStatus = document.getElementById("filter-status");
+        
+        // Load history data from API
+        fetch("/api/sieve/history")
+            .then(res => res.json())
+            .then(data => {
+                allRuns = data;
+                renderTable(allRuns);
+            })
+            .catch(err => {
+                console.error("Error loading history:", err);
+                document.getElementById("history-table-body").innerHTML = `
+                    <tr><td colspan="10" class="text-center text-danger">Error loading history. Please try reloading.</td></tr>
+                `;
+            });
+            
+        // Map filter listeners
+        searchInput.addEventListener("input", filterHistory);
+        filterStatus.addEventListener("change", filterHistory);
+    });
+
+    function renderTable(runs) {
+        const tbody = document.getElementById("history-table-body");
+        
+        if (runs.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="10" class="text-center">No calibration runs match the criteria.</td></tr>`;
+            return;
+        }
+        
+        tbody.innerHTML = "";
+        runs.forEach(run => {
+            const badgeClass = run.status === "Pass" ? "badge-success" : "badge-danger";
+            const badgeIcon = run.status === "Pass" ? "fa-circle-check" : "fa-circle-xmark";
+            
+            // Format date beautifully
+            const date = new Date(run.timestamp).toLocaleString();
+            
+            tbody.innerHTML += `
+                <tr>
+                    <td>${date}</td>
+                    <td><strong>${run.sieve_id_tag}</strong></td>
+                    <td>${run.sieve_name}</td>
+                    <td>${run.nominal_size_um} µm</td>
+                    <td><span style="font-size:12px; color:var(--text-secondary); text-transform:capitalize;">${run.state}</span></td>
+                    <td>${run.number_of_points} holes</td>
+                    <td><code>${run.area_average.toFixed(6)}</code></td>
+                    <td><code>${run.wire_thickness.toFixed(4)}</code></td>
+                    <td>
+                        <span class="badge ${badgeClass}">
+                            <i class="fa-solid ${badgeIcon}"></i> ${run.status}
+                        </span>
+                    </td>
+                    <td style="text-align:right;">
+                        <div style="display:inline-flex; gap:6px;">
+                            <a href="/results/${run.id}" class="btn btn-secondary" style="padding:6px 12px; font-size:11px">
+                                <i class="fa-solid fa-eye"></i> View
+                            </a>
+                            <a href="/api/sieve/results/${run.id}/export?format=pdf" class="btn btn-secondary" style="padding:6px 12px; font-size:11px" title="Export PDF Certificate">
+                                <i class="fa-solid fa-file-pdf" style="color:var(--accent-danger)"></i>
+                            </a>
+                            <a href="/api/sieve/results/${run.id}/export?format=csv" class="btn btn-secondary" style="padding:6px 12px; font-size:11px" title="Export Raw CSV Data">
+                                <i class="fa-solid fa-file-csv" style="color:var(--accent-success)"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function filterHistory() {
+        const query = document.getElementById("search-sieve-id").value.toLowerCase().trim();
+        const status = document.getElementById("filter-status").value;
+        
+        const filtered = allRuns.filter(run => {
+            const matchesSearch = run.sieve_id_tag.toLowerCase().includes(query) || run.sieve_name.toLowerCase().includes(query);
+            const matchesStatus = (status === "all") || (run.status.toLowerCase() === status);
+            return matchesSearch && matchesStatus;
+        });
+        
+        renderTable(filtered);
+    }
+</script>
+{% endblock %}

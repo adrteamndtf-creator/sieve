@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+
+{% block title %}New Sieve Analysis | Sieve Calibration System{% endblock %}
+{% block page_title %}New Sieve Analysis{% endblock %}
+
+{% block content %}
+<div class="layout-2col">
+    <!-- Left Column: Image Upload & Preview -->
+    <div class="card">
+        <h2 class="section-title">
+            <i class="fa-solid fa-images text-primary"></i> 1. Sieve Mesh Images
+        </h2>
+        
+        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
+            Upload one or more microscope images of the sieve mesh. The paper recommends analyzing 5 different regions (e.g., center, top-left, top-right, bottom-left, bottom-right) to ensure proper statistical coverage.
+        </p>
+
+        <!-- Drag & Drop Zone -->
+        <div class="upload-zone" id="drop-zone" onclick="document.getElementById('mesh-files').click()">
+            <i class="fa-solid fa-folder-open"></i>
+            <p>Drag & drop sieve images here, or click to select</p>
+            <span>Upload up to 5 images (PNG, JPG, BMP formats)</span>
+            <input type="file" id="mesh-files" accept="image/*" multiple class="file-input">
+        </div>
+        
+        <!-- Uploaded Images List -->
+        <div class="thumbnails-list" id="thumbnails-list"></div>
+    </div>
+    
+    <!-- Right Column: Sieve Metadata & Calibration Settings -->
+    <div class="card">
+        <h2 class="section-title">
+            <i class="fa-solid fa-circle-info text-sky"></i> 2. Sieve Specifications
+        </h2>
+        
+        <form id="analyze-form">
+            <!-- Sieve ID -->
+            <div class="form-group">
+                <label for="sieve-id">Sieve ID / Tag</label>
+                <input type="text" id="sieve-id" class="form-control" placeholder="e.g. S-2026-105" required>
+            </div>
+            
+            <!-- Sieve Name -->
+            <div class="form-group">
+                <label for="sieve-name">Sieve Name / Label</label>
+                <input type="text" id="sieve-name" class="form-control" placeholder="e.g. Fine Mesh Sieve" required>
+            </div>
+            
+            <!-- Nominal Size Dropdown -->
+            <div class="form-group">
+                <label for="nominal-size-select">Nominal Sieve Opening Size</label>
+                <select id="nominal-size-select" required>
+                    <option value="38">38 µm (ASTM No. 400)</option>
+                    <option value="45" selected>45 µm (ASTM No. 325)</option>
+                    <option value="53">53 µm (ASTM No. 270)</option>
+                    <option value="63">63 µm (ASTM No. 230)</option>
+                    <option value="75">75 µm (ASTM No. 200)</option>
+                    <option value="90">90 µm (ASTM No. 170)</option>
+                    <option value="125">125 µm (ASTM No. 120)</option>
+                    <option value="250">250 µm (ASTM No. 60)</option>
+                    <option value="500">500 µm (ASTM No. 35)</option>
+                    <option value="1000">1000 µm (1.00 mm)</option>
+                    <option value="custom">Custom Size...</option>
+                </select>
+            </div>
+            
+            <!-- Custom Nominal Size Input -->
+            <div class="form-group" id="custom-size-group" style="display:none">
+                <label for="custom-size">Custom Nominal Size (µm)</label>
+                <input type="number" id="custom-size" class="form-control" placeholder="Nominal size in micrometers">
+            </div>
+            
+            <div class="form-row">
+                <!-- Condition -->
+                <div class="form-group">
+                    <label for="sieve-state">Sieve Condition</label>
+                    <select id="sieve-state">
+                        <option value="new">New (Unused)</option>
+                        <option value="used">Used (In-Service)</option>
+                    </select>
+                </div>
+                
+                <!-- Calibration Factor -->
+                <div class="form-group">
+                    <label for="calibration-factor">Calibration Factor</label>
+                    <select id="calibration-factor">
+                        <option value="">Use Latest Factor</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Run Analysis Button -->
+            <button type="submit" class="btn btn-primary" style="width:100%; margin-top:20px; padding: 14px;" id="btn-run-analysis">
+                <i class="fa-solid fa-play"></i> Run Sieve Calibration
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Progress HUD Overlay -->
+<div class="progress-hud" id="progress-hud">
+    <div class="hud-loader"></div>
+    <h2 style="font-family:var(--font-heading); margin-bottom: 8px;">Calibrating Sieve...</h2>
+    <p style="color: var(--text-secondary); font-size:14px; margin-bottom:30px;" id="hud-status-text">Processing image data</p>
+    
+    <div class="hud-steps">
+        <div class="hud-step" id="step-upload"><i class="fa-solid fa-cloud-arrow-up"></i> Saving uploaded mesh images</div>
+        <div class="hud-step" id="step-otsu"><i class="fa-solid fa-circle-half-stroke"></i> Running Otsu's thresholding</div>
+        <div class="hud-step" id="step-label"><i class="fa-solid fa-tags"></i> 8-Connected Component filtering</div>
+        <div class="hud-step" id="step-wire"><i class="fa-solid fa-network-wired"></i> Calculating wire grid thicknesses</div>
+        <div class="hud-step" id="step-stats"><i class="fa-solid fa-chart-line"></i> Aggregating compliance report</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const dropZone = document.getElementById("drop-zone");
+        const fileInput = document.getElementById("mesh-files");
+        const thumbnailsList = document.getElementById("thumbnails-list");
+        
+        const sizeSelect = document.getElementById("nominal-size-select");
+        const customSizeGroup = document.getElementById("custom-size-group");
+        const customSizeInput = document.getElementById("custom-size");
+        
+        const calFactorSelect = document.getElementById("calibration-factor");
+        const form = document.getElementById("analyze-form");
+        const btnRun = document.getElementById("btn-run-analysis");
+        
+        const progressHud = document.getElementById("progress-hud");
+        const hudStatusText = document.getElementById("hud-status-text");
+        
+        let uploadedFiles = []; // Holds file objects to submit
+
+        // Toggle custom size field
+        sizeSelect.addEventListener("change", () => {
+            if (sizeSelect.value === "custom") {
+                customSizeGroup.style.display = "block";
+                customSizeInput.required = true;
+            } else {
+                customSizeGroup.style.display = "none";
+                customSizeInput.required = false;
+            }
+        });
+
+        // Load calibration factor dropdown list
+        fetch("/api/calibration/history")
+            .then(res => res.json())
+            .then(data => {
+                data.forEach(cf => {
+                    const date = new Date(cf.created_at).toLocaleDateString();
+                    calFactorSelect.innerHTML += `
+                        <option value="${cf.id}">${cf.pixels_per_mm.toFixed(1)} px/mm (${date})</option>
+                    `;
+                });
+            })
+            .catch(err => console.error("Error loading calibration list:", err));
+
+        // Drag & Drop event listeners
+        ["dragenter", "dragover"].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.style.borderColor = "var(--accent-primary)";
+                dropZone.style.backgroundColor = "rgba(99, 102, 241, 0.08)";
+            }, false);
+        });
+
+        ["dragleave", "drop"].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.style.borderColor = "var(--border-color)";
+                dropZone.style.backgroundColor = "rgba(15, 23, 42, 0.3)";
+            }, false);
+        });
+
+        dropZone.addEventListener("drop", (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        });
+
+        fileInput.addEventListener("change", (e) => {
+            handleFiles(e.target.files);
+        });
+
+        function handleFiles(files) {
+            const fileList = Array.from(files);
+            
+            // Limit files
+            if (uploadedFiles.length + fileList.length > 5) {
+                alert("You can upload a maximum of 5 images representing different regions of the same sieve.");
+                return;
+            }
+            
+            fileList.forEach(file => {
+                if (!file.type.startsWith("image/")) {
+                    alert(`${file.name} is not an image file.`);
+                    return;
+                }
+                
+                uploadedFiles.push(file);
+                
+                // Read image for preview thumbnail
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const idx = uploadedFiles.length - 1;
+                    thumbnailsList.innerHTML += `
+                        <div class="thumbnail-container" id="thumb-${idx}">
+                            <img src="${e.target.result}" alt="thumbnail">
+                            <button type="button" class="thumbnail-remove" onclick="removeThumbnail(${idx})">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    `;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Global function to remove thumbnails
+        window.removeThumbnail = function(idx) {
+            uploadedFiles.splice(idx, 1);
+            // Refresh thumbnails listing
+            thumbnailsList.innerHTML = "";
+            uploadedFiles.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    thumbnailsList.innerHTML += `
+                        <div class="thumbnail-container" id="thumb-${index}">
+                            <img src="${e.target.result}" alt="thumbnail">
+                            <button type="button" class="thumbnail-remove" onclick="removeThumbnail(${index})">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    `;
+                };
+                reader.readAsDataURL(file);
+            });
+        };
+
+        // Form Submit handler
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            
+            if (uploadedFiles.length === 0) {
+                alert("Please upload at least one sieve mesh image.");
+                return;
+            }
+            
+            const sieveId = document.getElementById("sieve-id").value;
+            const sieveName = document.getElementById("sieve-name").value;
+            const sieveState = document.getElementById("sieve-state").value;
+            
+            let nominalSize = parseFloat(sizeSelect.value);
+            if (sizeSelect.value === "custom") {
+                nominalSize = parseFloat(customSizeInput.value);
+            }
+            
+            const calibrationFactorId = calFactorSelect.value;
+
+            // Setup FormData
+            const formData = new FormData();
+            formData.append("sieve_id_tag", sieveId);
+            formData.append("sieve_name", sieveName);
+            formData.append("nominal_size_um", nominalSize);
+            formData.append("sieve_state", sieveState);
+            if (calibrationFactorId) {
+                formData.append("calibration_factor_id", calibrationFactorId);
+            }
+            
+            uploadedFiles.forEach(file => {
+                formData.append("files", file);
+            });
+
+            // Trigger Progress HUD overlay
+            progressHud.classList.add("active");
+            
+            // Visual Pipeline Steps Simulation
+            const steps = [
+                { id: "step-upload", text: "Saving uploaded mesh images..." },
+                { id: "step-otsu", text: "Applying Otsu's binarization..." },
+                { id: "step-label", text: "Removing dust via 8-connected components..." },
+                { id: "step-wire", text: "Sweeping angles to detect wire grid..." },
+                { id: "step-stats", text: "Evaluating ASTM E11 tolerances..." }
+            ];
+
+            const runStepVisuals = (index) => {
+                if (index >= steps.length) return;
+                const step = steps[index];
+                const el = document.getElementById(step.id);
+                el.classList.add("active");
+                hudStatusText.innerText = step.text;
+                
+                // Keep completed steps styled green
+                if (index > 0) {
+                    document.getElementById(steps[index-1].id).classList.remove("active");
+                    document.getElementById(steps[index-1].id).classList.add("completed");
+                    document.getElementById(steps[index-1].id).querySelector("i").className = "fa-solid fa-square-check";
+                }
+                
+                setTimeout(() => runStepVisuals(index + 1), 600);
+            };
+            
+            runStepVisuals(0);
+
+            try {
+                const response = await fetch("/api/sieve/analyze", {
+                    method: "POST",
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.detail || "Analysis failed");
+                }
+                
+                const data = await response.json();
+                
+                // Fast-complete HUD visual
+                steps.forEach(step => {
+                    const el = document.getElementById(step.id);
+                    el.className = "hud-step completed";
+                    el.querySelector("i").className = "fa-solid fa-square-check";
+                });
+                hudStatusText.innerText = "Sieve calibrated successfully! Loading results...";
+                
+                setTimeout(() => {
+                    window.location.href = `/results/${data.run_id}`;
+                }, 800);
+                
+            } catch (err) {
+                progressHud.classList.remove("active");
+                alert(`Analysis failed: ${err.message}`);
+            }
+        });
+    });
+</script>
+{% endblock %}

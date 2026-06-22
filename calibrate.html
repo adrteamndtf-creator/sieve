@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Scale Calibration | Sieve Calibration System{% endblock %}
+{% block page_title %}Microscope Scale Calibration{% endblock %}
+
+{% block content %}
+<div class="layout-2col">
+    <!-- Left Column: Interactive Canvas -->
+    <div class="card">
+        <h2 class="section-title">
+            <i class="fa-solid fa-image text-primary"></i> 1. Select Reference Line
+        </h2>
+        
+        <p style="color: var(--text-secondary); font-size:14px; margin-bottom:20px; line-height: 1.5;">
+            Upload an image of your graduated scale (ruler or crystal pattern) at the current microscope zoom level. Then, click two points on the image below to draw a line between a known reference distance.
+        </p>
+
+        <!-- Canvas Container -->
+        <div class="canvas-wrapper">
+            <div id="canvas-placeholder" style="color: var(--text-muted); text-align: center; padding: 40px;">
+                <i class="fa-solid fa-upload" style="font-size: 48px; margin-bottom: 16px; display: block; color: var(--accent-primary)"></i>
+                <span>Please upload a calibration scale image to begin</span>
+            </div>
+            <canvas id="calibration-canvas" class="calibration-canvas" style="display:none"></canvas>
+        </div>
+        
+        <div class="flex-between mt-20" id="canvas-actions" style="display:none">
+            <div style="font-size: 13px; color: var(--text-secondary);">
+                Point A: <span id="pt-a" style="color:white; font-weight:600">—</span> &nbsp;|&nbsp; 
+                Point B: <span id="pt-b" style="color:white; font-weight:600">—</span> &nbsp;|&nbsp; 
+                Pixel Distance: <span id="pt-dist" style="color:var(--accent-secondary); font-weight:600">— px</span>
+            </div>
+            <button class="btn btn-secondary" id="btn-clear-canvas" style="padding: 8px 16px; font-size:12px">
+                <i class="fa-solid fa-rotate-left"></i> Reset Points
+            </button>
+        </div>
+    </div>
+    
+    <!-- Right Column: Calibration Parameters & Database -->
+    <div style="display: flex; flex-direction: column; gap: 30px;">
+        <!-- Setup Card -->
+        <div class="card">
+            <h2 class="section-title">
+                <i class="fa-solid fa-sliders text-sky"></i> 2. Calibration Setup
+            </h2>
+            
+            <form id="calibration-form">
+                <!-- File Selection -->
+                <div class="upload-zone" onclick="document.getElementById('scale-file').click()">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <p>Click to select scale image</p>
+                    <span id="selected-filename">PNG, JPG, or BMP formats</span>
+                    <input type="file" id="scale-file" accept="image/*" class="file-input">
+                </div>
+                
+                <!-- Known Distance -->
+                <div class="form-group">
+                    <label for="known-distance">Known Distance (mm)</label>
+                    <input type="number" step="any" id="known-distance" class="form-control" placeholder="e.g. 1.0 or 0.5" required>
+                </div>
+                
+                <!-- Submit -->
+                <button type="submit" class="btn btn-primary" style="width:100%; margin-top: 10px;" id="btn-calibrate" disabled>
+                    <i class="fa-solid fa-calculator"></i> Compute Calibration Factor
+                </button>
+            </form>
+            
+            <!-- Result Display -->
+            <div id="calibration-result" class="card mt-20" style="display:none; background-color: rgba(99, 102, 241, 0.05); border-color: rgba(99, 102, 241, 0.3)">
+                <div style="text-align: center;">
+                    <span style="font-size:12px; color: var(--text-secondary); text-transform:uppercase; letter-spacing:1px">Calculated Calibration Factor</span>
+                    <div id="factor-display" style="font-size: 32px; font-weight:800; color: white; margin: 8px 0; font-family: var(--font-heading)">
+                        0.00 <span style="font-size:14px; font-weight:normal; color:var(--text-secondary)">px/mm</span>
+                    </div>
+                    <span class="badge badge-success">
+                        <i class="fa-solid fa-circle-check"></i> Persisted & Ready
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Calibration History -->
+        <div class="card">
+            <h2 class="section-title">
+                <i class="fa-solid fa-history text-muted"></i> Saved Calibration Factors
+            </h2>
+            <div class="table-wrapper" style="max-height: 250px; overflow-y: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Factor</th>
+                            <th>Known Dist</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cal-history-table">
+                        <tr>
+                            <td colspan="3" class="text-center">No calibration factors saved yet</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/canvas_calibrate.js"></script>
+{% endblock %}

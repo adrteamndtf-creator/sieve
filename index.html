@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard | Sieve Calibration System{% endblock %}
+{% block page_title %}System Dashboard{% endblock %}
+
+{% block content %}
+<!-- Dashboard Stats Grid -->
+<div class="dashboard-grid">
+    <!-- Stat Card 1 -->
+    <div class="card">
+        <div class="card-stat">
+            <div class="stat-info">
+                <h3>Total Sieves</h3>
+                <p id="stat-total-sieves">—</p>
+            </div>
+            <div class="stat-icon blue">
+                <i class="fa-solid fa-circle-nodes"></i>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Stat Card 2 -->
+    <div class="card">
+        <div class="card-stat">
+            <div class="stat-info">
+                <h3>Calibration Runs</h3>
+                <p id="stat-total-runs">—</p>
+            </div>
+            <div class="stat-icon sky">
+                <i class="fa-solid fa-microscope"></i>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Stat Card 3 -->
+    <div class="card">
+        <div class="card-stat">
+            <div class="stat-info">
+                <h3>System Pass Rate</h3>
+                <p id="stat-pass-rate">—%</p>
+            </div>
+            <div class="stat-icon green" id="pass-rate-icon">
+                <i class="fa-solid fa-square-check"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="layout-2col">
+    <!-- Recent Calibration Runs -->
+    <div class="card">
+        <div class="flex-between mb-20">
+            <h2 class="section-title" style="margin-bottom:0">
+                <i class="fa-solid fa-list-check text-success"></i> Recent Calibrations
+            </h2>
+            <a href="/history" class="btn btn-secondary" style="padding: 8px 16px; font-size:12px">View All</a>
+        </div>
+        
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Sieve ID</th>
+                        <th>Nominal Size</th>
+                        <th>Holes</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="recent-runs-table">
+                    <tr>
+                        <td colspan="6" class="text-center">Loading recent calibrations...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Quick Actions Panel -->
+    <div class="card">
+        <h2 class="section-title">
+            <i class="fa-solid fa-bolt text-danger"></i> Quick Operations
+        </h2>
+        
+        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
+            Automate the measurement of sieve hole areas and wire thicknesses in seconds. Select one of the workflows below to begin.
+        </p>
+        
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <a href="/calibrate" class="btn btn-primary" style="justify-content: flex-start; padding: 16px;">
+                <i class="fa-solid fa-ruler-combined" style="font-size:18px"></i>
+                <div style="text-align: left">
+                    <div style="font-weight:700">1. Calibrate Scale Factor</div>
+                    <span style="font-size:11px; font-weight:normal; opacity:0.8">Calculate pixels-per-mm for your setup</span>
+                </div>
+            </a>
+            
+            <a href="/analyze" class="btn btn-secondary" style="justify-content: flex-start; padding: 16px; border-color: var(--accent-primary)">
+                <i class="fa-solid fa-microscope" style="font-size:18px; color: var(--accent-primary)"></i>
+                <div style="text-align: left">
+                    <div style="font-weight:700">2. Analyze Sieve Mesh</div>
+                    <span style="font-size:11px; font-weight:normal; opacity:0.8">Upload mesh images to run calibration checks</span>
+                </div>
+            </a>
+            
+            <a href="/history" class="btn btn-secondary" style="justify-content: flex-start; padding: 16px">
+                <i class="fa-solid fa-file-invoice" style="font-size:18px"></i>
+                <div style="text-align: left">
+                    <div style="font-weight:700">3. View Certificates</div>
+                    <span style="font-size:11px; font-weight:normal; opacity:0.8">Export past calibration results as PDF/CSV</span>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        // Load statistics
+        fetch("/api/dashboard-stats")
+            .then(res => {
+                if (!res.ok) throw new Error("Network response was not ok");
+                return res.json();
+            })
+            .then(data => {
+                document.getElementById("stat-total-sieves").innerText = data.total_sieves;
+                document.getElementById("stat-total-runs").innerText = data.total_runs;
+                document.getElementById("stat-pass-rate").innerText = data.pass_rate + "%";
+                
+                // Color pass rate icon dynamically
+                const prIcon = document.getElementById("pass-rate-icon");
+                if (data.pass_rate < 70) {
+                    prIcon.className = "stat-icon red";
+                    prIcon.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i>`;
+                } else if (data.pass_rate < 90) {
+                    prIcon.className = "stat-icon sky";
+                    prIcon.innerHTML = `<i class="fa-solid fa-circle-question"></i>`;
+                }
+                
+                // Populate table
+                const tbody = document.getElementById("recent-runs-table");
+                if (data.latest_runs.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center">No calibrations run yet. Start by calibrating your scale factor!</td></tr>`;
+                    return;
+                }
+                
+                tbody.innerHTML = "";
+                data.latest_runs.forEach(run => {
+                    const badgeClass = run.status === "Pass" ? "badge-success" : "badge-danger";
+                    const badgeIcon = run.status === "Pass" ? "fa-circle-check" : "fa-circle-xmark";
+                    
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${run.timestamp}</td>
+                            <td><strong>${run.sieve_id_tag}</strong></td>
+                            <td>${run.nominal_size_um} µm</td>
+                            <td>${run.number_of_points} holes</td>
+                            <td>
+                                <span class="badge ${badgeClass}">
+                                    <i class="fa-solid ${badgeIcon}"></i> ${run.status}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="/results/${run.id}" class="btn btn-secondary" style="padding: 6px 12px; font-size:11px">
+                                    <i class="fa-solid fa-eye"></i> View
+                                </a>
+                            </td>
+                        </tr>
+                    `;
+                });
+            })
+            .catch(err => {
+                console.error("Error loading dashboard statistics:", err);
+                document.getElementById("recent-runs-table").innerHTML = `
+                    <tr><td colspan="6" class="text-center text-danger">Error loading dashboard statistics. Please try reloading.</td></tr>
+                `;
+            });
+    });
+</script>
+{% endblock %}

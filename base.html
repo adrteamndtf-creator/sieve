@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sieve Calibration System{% endblock %}</title>
+    
+    <!-- Meta SEO Tags -->
+    <meta name="description" content="Automated machine vision expert system for sieve calibration. Computes hole areas, wire thickness, and ASTM E11 compliance.">
+    <meta name="author" content="Antigravity AI">
+    
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-logo">
+                    <i class="fa-solid fa-circle-nodes brand-icon-glow"></i>
+                </div>
+                <div class="brand-text">
+                    <h2>SieveVision</h2>
+                    <span>Calibration System</span>
+                </div>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="/" class="nav-item" id="nav-dashboard">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="/calibrate" class="nav-item" id="nav-calibrate">
+                    <i class="fa-solid fa-ruler-combined"></i>
+                    <span>Calibrate Scale</span>
+                </a>
+                <a href="/analyze" class="nav-item" id="nav-analyze">
+                    <i class="fa-solid fa-microscope"></i>
+                    <span>New Analysis</span>
+                </a>
+                <a href="/history" class="nav-item" id="nav-history">
+                    <i class="fa-solid fa-history"></i>
+                    <span>Run History</span>
+                </a>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="system-status">
+                    <span class="status-indicator online"></span>
+                    <span>System Ready</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header class="top-header">
+                <div class="page-title-area">
+                    <h1 class="page-title">{% block page_title %}Dashboard{% endblock %}</h1>
+                </div>
+                <div class="user-profile">
+                    <i class="fa-regular fa-bell header-icon"></i>
+                    <div class="divider"></div>
+                    <div class="avatar">
+                        <span>OP</span>
+                    </div>
+                </div>
+            </header>
+            
+            <div class="content-body">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Set active class on navbar depending on current route
+        document.addEventListener("DOMContentLoaded", () => {
+            const path = window.location.pathname;
+            document.querySelectorAll(".nav-item").forEach(item => {
+                item.classList.remove("active");
+            });
+            
+            if (path === "/") {
+                document.getElementById("nav-dashboard").classList.add("active");
+            } else if (path.startsWith("/calibrate")) {
+                document.getElementById("nav-calibrate").classList.add("active");
+            } else if (path.startsWith("/analyze")) {
+                document.getElementById("nav-analyze").classList.add("active");
+            } else if (path.startsWith("/history") || path.startsWith("/results")) {
+                document.getElementById("nav-history").classList.add("active");
+            }
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

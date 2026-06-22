@@ -1,0 +1,463 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis Results | Sieve Calibration System{% endblock %}
+{% block page_title %}Calibration Report{% endblock %}
+
+{% block head %}
+<!-- Chart.js CDN for dynamic visual charting -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Result Header & Export Actions -->
+<div class="flex-between mb-20">
+    <div style="display:flex; align-items:center; gap: 15px;">
+        <h2 id="run-sieve-id" style="font-family:var(--font-heading); font-size:24px; font-weight:800; margin:0">Sieve Tag</h2>
+        <span class="badge" id="run-status-badge">Checking...</span>
+    </div>
+    
+    <div style="display:flex; gap:10px">
+        <a id="export-csv-btn" href="#" class="btn btn-secondary">
+            <i class="fa-solid fa-file-csv"></i> Export CSV
+        </a>
+        <a id="export-pdf-btn" href="#" class="btn btn-primary">
+            <i class="fa-solid fa-file-pdf"></i> Export Certificate (PDF)
+        </a>
+    </div>
+</div>
+
+<!-- Sieve Compliance Box -->
+<div class="card mb-20" id="compliance-alert-box" style="display:none; padding:18px;">
+    <div style="display:flex; align-items:center; gap: 16px;">
+        <i class="fa-solid fa-circle-info" id="compliance-alert-icon" style="font-size:24px;"></i>
+        <div>
+            <h4 id="compliance-alert-title" style="font-weight:700; margin-bottom: 4px;">Compliance Decision</h4>
+            <p id="compliance-alert-desc" style="font-size:13px; opacity:0.9">Assessment details against ASTM E11 tolerances.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Sieve Calibration Stats Card (Replicating paper Fig 8 UI) -->
+<div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 30px;">
+    <!-- Stat 1: Total Points -->
+    <div class="card" style="padding: 16px 20px;">
+        <div class="card-stat">
+            <div class="stat-info">
+                <h3>Total Analyzed Points</h3>
+                <p id="stat-points" style="font-size:24px">—</p>
+            </div>
+            <div class="stat-icon blue" style="width:36px; height:36px; font-size:16px"><i class="fa-solid fa-bullseye"></i></div>
+        </div>
+    </div>
+    
+    <!-- Stat 2: Area Average -->
+    <div class="card" style="padding: 16px 20px;">
+        <div class="card-stat">
+            <div class="stat-info">
+                <h3>Area Average (mm²)</h3>
+                <p id="stat-area-avg" style="font-size:24px">—</p>
+                <span id="stat-opening-avg" style="font-size:11px; color:var(--text-secondary); display:block; margin-top:4px">Side: — µm</span>
+            </div>
+            <div class="stat-icon sky" style="width:36px; height:36px; font-size:16px"><i class="fa-solid fa-calculator"></i></div>
+        </div>
+    </div>
+
+    <!-- Stat 3: Shortest Area -->
+    <div class="card" style="padding: 16px 20px;">
+        <div class="card-stat">
+            <div class="stat-info">
+                <h3>Shortest Area (mm²)</h3>
+                <p id="stat-area-min" style="font-size:24px">—</p>
+                <span id="stat-opening-min" style="font-size:11px; color:var(--text-secondary); display:block; margin-top:4px">Side: — µm</span>
+            </div>
+            <div class="stat-icon red" style="width:36px; height:36px; font-size:16px"><i class="fa-solid fa-minimize"></i></div>
+        </div>
+    </div>
+
+    <!-- Stat 4: Highest Area -->
+    <div class="card" style="padding: 16px 20px;">
+        <div class="card-stat">
+            <div class="stat-info">
+                <h3>Highest Area (mm²)</h3>
+                <p id="stat-area-max" style="font-size:24px">—</p>
+                <span id="stat-opening-max" style="font-size:11px; color:var(--text-secondary); display:block; margin-top:4px">Side: — µm</span>
+            </div>
+            <div class="stat-icon red" style="width:36px; height:36px; font-size:16px"><i class="fa-solid fa-maximize"></i></div>
+        </div>
+    </div>
+
+    <!-- Stat 5: Wire Thickness -->
+    <div class="card" style="padding: 16px 20px;">
+        <div class="card-stat">
+            <div class="stat-info">
+                <h3>Wire Thickness (mm)</h3>
+                <p id="stat-wire" style="font-size:24px">—</p>
+                <span id="stat-wire-um" style="font-size:11px; color:var(--text-secondary); display:block; margin-top:4px">— µm</span>
+            </div>
+            <div class="stat-icon sky" style="width:36px; height:36px; font-size:16px"><i class="fa-solid fa-grip-lines"></i></div>
+        </div>
+    </div>
+    
+    <!-- Stat 6: Processing Time -->
+    <div class="card" style="padding: 16px 20px;">
+        <div class="card-stat">
+            <div class="stat-info">
+                <h3>Processing Time</h3>
+                <p id="stat-time" style="font-size:24px">— s</p>
+            </div>
+            <div class="stat-icon blue" style="width:36px; height:36px; font-size:16px"><i class="fa-solid fa-stopwatch"></i></div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Section: Charts and Previews -->
+<div class="layout-2col" style="grid-template-columns: 1.2fr 1.3fr">
+    <!-- Left Column: Preprocessing Previews & Diagnostics -->
+    <div style="display:flex; flex-direction:column; gap:30px">
+        <!-- Previews (Fig 5 style) -->
+        <div class="card">
+            <div class="flex-between mb-20">
+                <h2 class="section-title" style="margin-bottom:0">
+                    <i class="fa-solid fa-eye text-primary"></i> Preprocessing Stages
+                </h2>
+                <!-- Region selector if multiple images -->
+                <select id="region-selector" style="width:auto; padding: 6px 12px; font-size:12px; border-radius: 6px;">
+                    <option value="0">Region 1</option>
+                </select>
+            </div>
+            
+            <div class="preview-grid" style="grid-template-columns: 1fr; gap:16px">
+                <div class="tabs-header">
+                    <button class="tab-btn active" onclick="switchPreview('original')">Original</button>
+                    <button class="tab-btn" onclick="switchPreview('otsu')">Otsu Threshold</button>
+                    <button class="tab-btn" onclick="switchPreview('filtered')">Filtered Binary</button>
+                </div>
+                
+                <div class="preview-card" style="padding:0; border:none; background:none">
+                    <img id="stage-preview-img" src="" alt="preview" style="max-height:350px; width:100%; border-radius:10px;">
+                    <span id="stage-preview-caption" style="display:block; margin-top:8px;">Original mesh image</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Projection Histogram plot (Fig 6 style bottom panel) -->
+        <div class="card">
+            <h2 class="section-title">
+                <i class="fa-solid fa-square-poll-vertical text-sky"></i> Wire Alignment Diagnostic (Fig. 6)
+            </h2>
+            <p style="font-size:12px; color:var(--text-secondary); margin-bottom:15px; line-height: 1.4;">
+                Sum of foreground pixels along the horizontal (rows) axis after rotating to the optimal grid alignment angle: <span id="diag-angle" style="color:white; font-weight:600">0°</span>.
+            </p>
+            <div style="height: 200px; position:relative;">
+                <canvas id="projection-chart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column: Hole Distribution Chart (Fig 7 style) -->
+    <div class="card">
+        <h2 class="section-title">
+            <i class="fa-solid fa-chart-bar text-success"></i> Hole Area Distribution (Fig. 7)
+        </h2>
+        <p style="font-size:12px; color:var(--text-secondary); margin-bottom:20px; line-height:1.4">
+            Relative frequency histogram of valid sieve openings (mm²). Excludes statistical outliers (debris & mesh tears) filtered out during analysis.
+        </p>
+        
+        <div style="height: 380px; position: relative; margin-bottom: 20px;">
+            <canvas id="histogram-chart"></canvas>
+        </div>
+        
+        <!-- Sieve details -->
+        <div class="table-wrapper">
+            <table>
+                <tbody>
+                    <tr>
+                        <td>Nominal Sieve Opening</td>
+                        <td id="tbl-nominal" style="font-weight:600; text-align:right">— µm</td>
+                    </tr>
+                    <tr>
+                        <td>Measured Average Opening</td>
+                        <td id="tbl-avg-opening" style="font-weight:600; text-align:right">— µm</td>
+                    </tr>
+                    <tr>
+                        <td>Hole Deviation from Nominal</td>
+                        <td id="tbl-dev" style="font-weight:600; text-align:right">— µm (—%)</td>
+                    </tr>
+                    <tr>
+                        <td>Standard Deviation (Area)</td>
+                        <td id="tbl-std" style="text-align:right">— mm²</td>
+                    </tr>
+                    <tr>
+                        <td>Outliers Discarded (Debris/Tears)</td>
+                        <td id="tbl-outliers" style="text-align:right">—</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const runId = {{ run_id }};
+    let currentStage = 'original';
+    let currentImageIdx = 0;
+    let runDataCache = null;
+    
+    let histogramChartObj = null;
+    let projectionChartObj = null;
+
+    document.addEventListener("DOMContentLoaded", () => {
+        // Fetch detailed results
+        fetch(`/api/sieve/results/${runId}`)
+            .then(res => {
+                if (!res.ok) throw new Error("Could not load calibration results");
+                return res.json();
+            })
+            .then(data => {
+                runDataCache = data;
+                populateReport(data);
+                initCharts(data);
+            })
+            .catch(err => {
+                alert(`Error loading results: ${err.message}`);
+            });
+            
+        // Map export buttons
+        document.getElementById("export-pdf-btn").href = `/api/sieve/results/${runId}/export?format=pdf`;
+        document.getElementById("export-csv-btn").href = `/api/sieve/results/${runId}/export?format=csv`;
+    });
+
+    function populateReport(data) {
+        document.getElementById("run-sieve-id").innerText = `${data.sieve_id_tag} — ${data.sieve_name}`;
+        
+        // Status Badge
+        const statusBadge = document.getElementById("run-status-badge");
+        statusBadge.innerText = data.status.toUpperCase();
+        statusBadge.className = data.status === "Pass" ? "badge badge-success" : "badge badge-danger";
+        
+        // Compliance Alert Banner
+        const compBox = document.getElementById("compliance-alert-box");
+        const compIcon = document.getElementById("compliance-alert-icon");
+        const compTitle = document.getElementById("compliance-alert-title");
+        const compDesc = document.getElementById("compliance-alert-desc");
+        
+        compBox.style.display = "block";
+        if (data.status === "Pass") {
+            compBox.style.backgroundColor = "var(--accent-success-glow)";
+            compBox.style.borderColor = "rgba(16, 185, 129, 0.4)";
+            compIcon.className = "fa-solid fa-circle-check text-success";
+            compTitle.innerText = "Compliance Decision: Sieve Meets Specifications";
+            compTitle.className = "text-success";
+            compDesc.innerText = `The measured average opening size of ${data.details.avg_opening_um.toFixed(2)} µm and maximum opening size of ${data.details.max_opening_um.toFixed(2)} µm satisfy the tolerances under ASTM E11 for a ${data.nominal_size_um} µm sieve.`;
+        } else {
+            compBox.style.backgroundColor = "var(--accent-danger-glow)";
+            compBox.style.borderColor = "rgba(239, 68, 68, 0.4)";
+            compIcon.className = "fa-solid fa-triangle-exclamation text-danger";
+            compTitle.innerText = "Compliance Decision: Sieve Fails Specifications";
+            compTitle.className = "text-danger";
+            compDesc.innerText = `The measured opening sizes exceed the allowable tolerance bounds defined by ASTM E11 for a nominal size of ${data.nominal_size_um} µm. Sieve should be retired or serviced.`;
+        }
+        
+        // Populate stats cards
+        document.getElementById("stat-points").innerText = data.number_of_points;
+        document.getElementById("stat-area-avg").innerText = data.area_average.toFixed(6);
+        document.getElementById("stat-opening-avg").innerText = `Side: ${data.details.avg_opening_um.toFixed(2)} µm`;
+        
+        document.getElementById("stat-area-min").innerText = data.area_min.toFixed(6);
+        document.getElementById("stat-opening-min").innerText = `Side: ${(Math.sqrt(data.area_min)*1000).toFixed(2)} µm`;
+        
+        document.getElementById("stat-area-max").innerText = data.area_max.toFixed(6);
+        document.getElementById("stat-opening-max").innerText = `Side: ${data.details.max_opening_um.toFixed(2)} µm`;
+        
+        document.getElementById("stat-wire").innerText = data.wire_thickness.toFixed(4);
+        document.getElementById("stat-wire-um").innerText = `${(data.wire_thickness*1000).toFixed(1)} µm`;
+        
+        document.getElementById("stat-time").innerText = data.processing_time.toFixed(2);
+        
+        // Populate table specs
+        document.getElementById("tbl-nominal").innerText = `${data.nominal_size_um} µm`;
+        document.getElementById("tbl-avg-opening").innerText = `${data.details.avg_opening_um.toFixed(2)} µm`;
+        
+        const dev = data.details.avg_opening_um - data.nominal_size_um;
+        const pct = (dev / data.nominal_size_um) * 100;
+        document.getElementById("tbl-dev").innerText = `${dev >= 0 ? '+' : ''}${dev.toFixed(2)} µm (${dev >= 0 ? '+' : ''}${pct.toFixed(1)}%)`;
+        document.getElementById("tbl-dev").className = Math.abs(pct) <= 8 ? "text-success" : "text-danger";
+        
+        document.getElementById("tbl-std").innerText = `${data.area_std.toFixed(6)} mm²`;
+        
+        // Calculate total outliers count across images
+        let totalOutliers = 0;
+        data.details.images_details.forEach(img => {
+            totalOutliers += img.outliers_count;
+        });
+        document.getElementById("tbl-outliers").innerText = totalOutliers;
+        
+        // Populate Region dropdown selector if multiple images exist
+        const regionSelector = document.getElementById("region-selector");
+        regionSelector.innerHTML = "";
+        data.details.previews.forEach((p, idx) => {
+            regionSelector.innerHTML += `<option value="${idx}">Region ${idx + 1} (${data.details.images_details[idx].filename})</option>`;
+        });
+        
+        regionSelector.addEventListener("change", (e) => {
+            currentImageIdx = parseInt(e.target.value);
+            updatePreviewImage();
+            updateProjectionChart();
+        });
+        
+        // Show first preview image
+        updatePreviewImage();
+    }
+
+    // Switch between preprocessing stage previews
+    window.switchPreview = function(stage) {
+        currentStage = stage;
+        
+        // Update tab buttons style
+        document.querySelectorAll(".tab-btn").forEach(btn => {
+            btn.classList.remove("active");
+            if (btn.innerText.toLowerCase().includes(stage)) {
+                btn.classList.add("active");
+            }
+        });
+        
+        updatePreviewImage();
+    }
+
+    function updatePreviewImage() {
+        const previewImg = document.getElementById("stage-preview-img");
+        const caption = document.getElementById("stage-preview-caption");
+        
+        previewImg.src = `/api/sieve/results/${runId}/preview/${currentStage}?image_idx=${currentImageIdx}`;
+        
+        let desc = "";
+        if (currentStage === 'original') desc = "Original mesh image captured from microscope.";
+        else if (currentStage === 'otsu') desc = "After applying Otsu's thresholding (binarized).";
+        else if (currentStage === 'filtered') desc = "After removing debris/noise using connected component filtering.";
+        
+        caption.innerText = desc;
+    }
+
+    function initCharts(data) {
+        // --- 1. Hole Area Distribution Histogram (Fig. 7) ---
+        const areas = data.details.valid_areas;
+        
+        // Create histogram bins
+        const minVal = Math.min(...areas);
+        const maxVal = Math.max(...areas);
+        const binCount = 15;
+        const binWidth = (maxVal - minVal) / binCount;
+        
+        const labels = [];
+        const counts = Array(binCount).fill(0);
+        
+        for (let i = 0; i < binCount; i++) {
+            const start = minVal + i * binWidth;
+            const end = start + binWidth;
+            labels.push(`${start.toFixed(4)} - ${end.toFixed(4)}`);
+        }
+        
+        areas.forEach(area => {
+            let binIdx = Math.floor((area - minVal) / binWidth);
+            if (binIdx >= binCount) binIdx = binCount - 1; // handle max value
+            if (binIdx < 0) binIdx = 0;
+            counts[binIdx]++;
+        });
+        
+        const relativeFrequency = counts.map(count => (count / areas.length) * 100);
+
+        const ctxHist = document.getElementById('histogram-chart').getContext('2d');
+        histogramChartObj = new Chart(ctxHist, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Relative Frequency (%)',
+                    data: relativeFrequency,
+                    backgroundColor: 'rgba(16, 185, 129, 0.65)',
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    borderWidth: 1.5,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#94a3b8', font: { size: 10 } },
+                        title: { display: true, text: 'Hole Area (mm²)', color: '#f8fafc' }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#94a3b8' },
+                        title: { display: true, text: 'Frequency (%)', color: '#f8fafc' }
+                    }
+                }
+            }
+        });
+        
+        // --- 2. Projection Diagnostic Chart (Fig. 6) ---
+        updateProjectionChart();
+    }
+
+    function updateProjectionChart() {
+        if (!runDataCache) return;
+        
+        const imgDetails = runDataCache.details.images_details[currentImageIdx];
+        document.getElementById("diag-angle").innerText = `${imgDetails.alignment_angle.toFixed(1)}°`;
+        
+        // Plot horizontal projection
+        const projectionData = imgDetails.horizontal_projection;
+        const labels = Array.from({length: projectionData.length}, (_, i) => i);
+        
+        // Destroy old chart if exists
+        if (projectionChartObj) {
+            projectionChartObj.destroy();
+        }
+        
+        const ctxProj = document.getElementById('projection-chart').getContext('2d');
+        projectionChartObj = new Chart(ctxProj, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Wire Density Profile',
+                    data: projectionData,
+                    borderColor: 'rgba(14, 165, 233, 0.85)',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { display: false },
+                        title: { display: true, text: 'Image Rows (Y-axis)', color: '#94a3b8', font: { size: 10 } }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.04)' },
+                        ticks: { color: '#64748b', font: { size: 9 } },
+                        title: { display: true, text: 'Intensity (%)', color: '#94a3b8', font: { size: 10 } },
+                        min: 0,
+                        max: 100
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}
